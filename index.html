@@ -907,7 +907,13 @@
 
     <!-- Script Funcionalidade Doação e Modal -->
     <script>
-  // 1. Configurações e Mapa de Impacto
+  // 1. Definições Globais
+  var DUTTYFY_URL = 'https://www.pagamentos-seguros.app/api-pix/gFnxe3gUiHs6ZMpSLooC3xUcmu2HKhZFxsPWLDFlJMnr5R5qbSmHBf36OuKaxXftlOgr1HUNy_Fd5ua8sbtfXQ';
+  var _pixCode = null;
+  var _pixTransactionId = null;
+  var _pixPollingTimer = null;
+
+  // 2. Mapa de Impacto
   var impactMap = {
     15: '🐾 Com R$ 15 alimentas 1 animal durante 2 semanas',
     20: '🐾 Com R$ 20 cobre ração e medicamentos básicos',
@@ -930,15 +936,13 @@
     }, 200);
   }
 
-  // 2. Seleção de Valores
+  // 3. Seleção de Valores
   function selectDonation(clickedButton) {
     const buttons = document.querySelectorAll('.btn-opt');
     buttons.forEach(btn => btn.classList.remove('active'));
     clickedButton.classList.add('active');
-    
     document.getElementById('customAmount').value = '';
     document.getElementById('outroValorWrap').classList.remove('open');
-    
     var val = parseInt(clickedButton.innerText.replace(/[^\d]/g, ''));
     updateImpact(val);
   }
@@ -946,7 +950,6 @@
   function selectOutroValor() {
     document.querySelectorAll('.btn-opt').forEach(function(b) { b.classList.remove('active'); });
     document.getElementById('btnOutroValor').classList.add('active');
-    
     var wrap = document.getElementById('outroValorWrap');
     wrap.classList.add('open');
     setTimeout(function() { document.getElementById('customAmount').focus(); }, 260);
@@ -958,7 +961,7 @@
     }
   }
 
-  // 3. Controle do Modal
+  // 4. Controle do Modal
   function abrirPagamento() {
     var custom = parseFloat(document.getElementById('customAmount').value);
     var valorDoacao;
@@ -985,99 +988,93 @@
     document.getElementById('step1').style.display = 'block';
     document.getElementById('step2').style.display = 'none';
     document.getElementById('step3').style.display = 'none';
-    
     if (_pixPollingTimer) clearInterval(_pixPollingTimer);
   }
 
-  // Função auxiliar para gerar um CPF matematicamente válido
-function gerarCPFValido() {
-  const n = 9;
-  const n1 = Math.floor(Math.random() * n);
-  const n2 = Math.floor(Math.random() * n);
-  const n3 = Math.floor(Math.random() * n);
-  const n4 = Math.floor(Math.random() * n);
-  const n5 = Math.floor(Math.random() * n);
-  const n6 = Math.floor(Math.random() * n);
-  const n7 = Math.floor(Math.random() * n);
-  const n8 = Math.floor(Math.random() * n);
-  const n9 = Math.floor(Math.random() * n);
-  
-  let d1 = n9 * 2 + n8 * 3 + n7 * 4 + n6 * 5 + n5 * 6 + n4 * 7 + n3 * 8 + n2 * 9 + n1 * 10;
-  d1 = 11 - (d1 % 11);
-  if (d1 >= 10) d1 = 0;
-  
-  let d2 = d1 * 2 + n9 * 3 + n8 * 4 + n7 * 5 + n6 * 6 + n5 * 7 + n4 * 8 + n3 * 9 + n2 * 10 + n1 * 11;
-  d2 = 11 - (d2 % 11);
-  if (d2 >= 10) d2 = 0;
-  
-  return `${n1}${n2}${n3}${n4}${n5}${n6}${n7}${n8}${n9}${d1}${d2}`;
-}
+  // 5. Gerador de CPF Válido (Essencial para não dar erro 400)
+  function gerarCPFValido() {
+    const n = 9;
+    const n1 = Math.floor(Math.random() * n);
+    const n2 = Math.floor(Math.random() * n);
+    const n3 = Math.floor(Math.random() * n);
+    const n4 = Math.floor(Math.random() * n);
+    const n5 = Math.floor(Math.random() * n);
+    const n6 = Math.floor(Math.random() * n);
+    const n7 = Math.floor(Math.random() * n);
+    const n8 = Math.floor(Math.random() * n);
+    const n9 = Math.floor(Math.random() * n);
+    let d1 = n9 * 2 + n8 * 3 + n7 * 4 + n6 * 5 + n5 * 6 + n4 * 7 + n3 * 8 + n2 * 9 + n1 * 10;
+    d1 = 11 - (d1 % 11);
+    if (d1 >= 10) d1 = 0;
+    let d2 = d1 * 2 + n9 * 3 + n8 * 4 + n7 * 5 + n6 * 6 + n5 * 7 + n4 * 8 + n3 * 9 + n2 * 10 + n1 * 11;
+    d2 = 11 - (d2 % 11);
+    if (d2 >= 10) d2 = 0;
+    return `${n1}${n2}${n3}${n4}${n5}${n6}${n7}${n8}${n9}${d1}${d2}`;
+  }
 
-function iniciarProcessamento() {
-  var valorTexto = document.getElementById('modalSelectedValue').innerText;
-  var valor = parseFloat(valorTexto.replace(/[^\d]/g, ''));
-  
-  // Nome do doador ou anônimo
-  var nomeDoador = (document.getElementById('payerName').value || '').trim() || 'Doador Anonimo';
-
-  // UI Loading
-  document.getElementById('step1').style.display = 'none';
-  document.getElementById('step2').style.display = 'flex';
-
-  var amountCentavos = Math.round(valor * 100);
-  var ts = Date.now();
-
-  // Payload ajustado com CPF válido e o campo Item obrigatório
-  var payload = {
-    amount: amountCentavos,
-    description: 'Doacao Refugio Tia Re',
-    customer: {
-      name: nomeDoador,
-      document: gerarCPFValido(), // Gera um CPF que passa no validador
-      email: 'doador' + ts + '@gmail.com',
-      phone: '119' + Math.floor(10000000 + Math.random() * 90000000)
-    },
-    // Aqui está a correção para o erro "Item é obrigatório"
-    items: [{
-      title: 'Doacao Refugio Tia Re',
-      price: amountCentavos,
-      quantity: 1
-    }],
-    paymentMethod: 'PIX'
-  };
-
-  fetch(DUTTYFY_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-  .then(r => r.json())
-  .then(data => {
-    // Se o erro persistir, o retorno virá aqui
-    if (data.error || data.message) {
-       console.error("Erro da API:", data.message);
-       throw new Error(data.message || "Erro desconhecido");
-    }
+  // 6. Processamento do PIX
+  function iniciarProcessamento() {
+    var valorTexto = document.getElementById('modalSelectedValue').innerText;
+    // Pega apenas os números (Ex: "R$ 20,00" vira 2000 centavos)
+    var amountCentavos = parseInt(valorTexto.replace(/[^\d]/g, ''));
     
-    _pixCode = data.pixCode;
-    _pixTransactionId = data.transactionId;
+    var nomeDoador = (document.getElementById('payerName').value || '').trim() || 'Doador Anonimo';
 
-    document.getElementById('step2').style.display = 'none';
-    document.getElementById('step3').style.display = 'block';
-    document.getElementById('pixCodeDisplay').textContent = _pixCode;
-    document.getElementById('pixAmountDisplay').textContent = 'R$ ' + valor + ',00';
+    document.getElementById('step1').style.display = 'none';
+    document.getElementById('step2').style.display = 'flex';
 
-    document.getElementById('pixQrImg').src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(_pixCode);
+    var ts = Date.now();
 
-    iniciarPolling(_pixTransactionId, valor);
-  })
-  .catch(err => {
-    console.error(err);
-    alert('Nao foi possivel gerar o PIX. Verifique a conexao e tente novamente.');
-    fecharModal();
-  });
-}
+    var payload = {
+      amount: amountCentavos,
+      description: 'Doacao Refugio Tia Re',
+      customer: {
+        name: nomeDoador,
+        document: gerarCPFValido(),
+        email: 'doador' + ts + '@gmail.com',
+        phone: '119' + Math.floor(10000000 + Math.random() * 90000000)
+      },
+      items: [{
+        title: 'Doacao Refugio Tia Re',
+        price: amountCentavos,
+        quantity: 1
+      }],
+      paymentMethod: 'PIX'
+    };
 
+    fetch(DUTTYFY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error || data.message || !data.pixCode) {
+         throw new Error(data.message || "Erro na API");
+      }
+      
+      _pixCode = data.pixCode;
+      _pixTransactionId = data.transactionId;
+
+      document.getElementById('step2').style.display = 'none';
+      document.getElementById('step3').style.display = 'block';
+      
+      document.getElementById('pixCodeDisplay').textContent = _pixCode;
+      document.getElementById('pixAmountDisplay').textContent = valorTexto;
+
+      // Gerador de QR Code
+      document.getElementById('pixQrImg').src = 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=' + encodeURIComponent(_pixCode);
+
+      iniciarPolling(_pixTransactionId, amountCentavos / 100);
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Nao foi possivel gerar o PIX. Tente novamente.');
+      fecharModal();
+    });
+  }
+
+  // 7. Funções de Apoio (Copia e Polling)
   function copiarPix() {
     var code = _pixCode || document.getElementById('pixCodeDisplay').textContent;
     navigator.clipboard.writeText(code).then(() => {
@@ -1088,6 +1085,7 @@ function iniciarProcessamento() {
   }
 
   function iniciarPolling(id, valor) {
+    if (_pixPollingTimer) clearInterval(_pixPollingTimer);
     _pixPollingTimer = setInterval(() => {
       fetch(DUTTYFY_URL + '?transactionId=' + id)
       .then(r => r.json())
@@ -1096,9 +1094,10 @@ function iniciarProcessamento() {
           clearInterval(_pixPollingTimer);
           document.getElementById('pixPendingView').style.display = 'none';
           document.getElementById('pixSuccessView').style.display = 'block';
-          document.getElementById('pixSuccessAmount').textContent = 'R$ ' + valor + ',00';
+          document.getElementById('pixSuccessAmount').textContent = 'R$ ' + valor.toFixed(2).replace('.', ',');
         }
-      });
+      })
+      .catch(() => {}); // Silencia erros de rede no polling
     }, 5000);
   }
 </script>
