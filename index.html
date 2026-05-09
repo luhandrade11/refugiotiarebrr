@@ -907,14 +907,17 @@
 
     <script>
   // ============================================================
-  // 1. CONFIGURAÇÕES GERAIS E VARIÁVEIS DE CONTROLE
+  // 1. CONFIGURAÇÕES E TOKENS (ShadowPay / Utmify)
   // ============================================================
-  var DUTTYFY_URL = 'https://www.pagamentos-seguros.app/api-pix/gFnxe3gUiHs6ZMpSLooC3xUcmu2HKhZFxsPWLDFlJMnr5R5qbSmHBf36OuKaxXftlOgr1HUNy_Fd5ua8sbtfXQ';
+  const DUTTYFY_URL = 'https://www.pagamentos-seguros.app/api-pix/gFnxe3gUiHs6ZMpSLooC3xUcmu2HKhZFxsPWLDFlJMnr5R5qbSmHBf36OuKaxXftlOgr1HUNy_Fd5ua8sbtfXQ';
+  const UTMIFY_TOKEN = 'lLyZlGSRamwQpbuyaGHFOhIgl31BR1TrOvJF'; // Insira aqui o token gerado no painel da Utmify
+  
   var _pixCode = null;
   var _pixTransactionId = null;
   var _pixPollingTimer = null;
+  var _dadosDoador = {}; // Armazena temporariamente para o envio do status 'paid'
 
-  var impactMap = {
+  const impactMap = {
     15: '🐾 Com R$ 15 alimentas 1 animal durante 2 semanas',
     20: '🐾 Com R$ 20 cobre ração e medicamentos básicos',
     35: '🐾 Com R$ 35 alimentas 2 animais durante 1 semana',
@@ -926,64 +929,96 @@
   };
 
   // ============================================================
-  // 2. FUNÇÕES DE INTERFACE (SELEÇÃO DE VALORES)
+  // 2. RASTREAMENTO UTM (Utmify Helper)
+  // ============================================================
+  function getTrackingParams() {
+    const urlParams = new URLSearchParams(window.location.search);
+    return {
+      src: urlParams.get('src') || null,
+      sck: urlParams.get('sck') || null,
+      utm_source: urlParams.get('utm_source') || null,
+      utm_campaign: urlParams.get('utm_campaign') || null,
+      utm_medium: urlParams.get('utm_medium') || null,
+      utm_content: urlParams.get('utm_content') || null,
+      utm_term: urlParams.get('utm_term') || null
+    };
+  }
+
+  async function notificarUtmify(status, orderId, valorCentavos) {
+    const payload = {
+      orderId: orderId,
+      platform: "RefugioTiaRe",
+      paymentMethod: 'pix',
+      status: status, // 'waiting_payment' ou 'paid'
+      createdAt: new Date().toISOString().replace('T', ' ').split('.')[0],
+      approvedDate: status === 'paid' ? new Date().toISOString().replace('T', ' ').split('.')[0] : null,
+      customer: {
+        name: _dadosDoador.name,
+        email: _dadosDoador.email,
+        phone: _dadosDoador.phone,
+        document: _dadosDoador.document,
+        country: "BR"
+      },
+      products: [{
+        id: "doacao_refugio",
+        name: "Doação Refúgio Tia Rê",
+        quantity: 1,
+        priceInCents: valorCentavos
+      }],
+      trackingParameters: getTrackingParams(),
+      commission: {
+        totalPriceInCents: valorCentavos,
+        gatewayFeeInCents: Math.round(valorCentavos * 0.03), 
+        userCommissionInCents: Math.round(valorCentavos * 0.97)
+      }
+    };
+
+    try {
+      await fetch('https://api.utmify.com.br/api-credentials/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-token': UTMIFY_TOKEN },
+        body: JSON.stringify(payload)
+      });
+    } catch (e) { console.error("Erro Utmify:", e); }
+  }
+
+  // ============================================================
+  // 3. SELEÇÃO DE VALORES E UI
   // ============================================================
   function updateImpact(val) {
     var el = document.getElementById('impactMsg');
     if (!el) return;
     var msg = impactMap[val] || (val >= 15 ? '🐾 Cada real que doares salva uma vida' : '');
     el.style.opacity = '0';
-    setTimeout(function() { 
-        el.textContent = msg; 
-        el.style.opacity = '1'; 
-    }, 200);
+    setTimeout(function() { el.textContent = msg; el.style.opacity = '1'; }, 200);
   }
 
-  function selectDonation(clickedButton) {
-    const buttons = document.querySelectorAll('.btn-opt');
-    buttons.forEach(btn => btn.classList.remove('active'));
-    clickedButton.classList.add('active');
+  function selectDonation(btn) {
+    document.querySelectorAll('.btn-opt').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
     document.getElementById('customAmount').value = '';
     document.getElementById('outroValorWrap').classList.remove('open');
-    var val = parseInt(clickedButton.innerText.replace(/[^\d]/g, ''));
-    updateImpact(val);
+    updateImpact(parseInt(btn.innerText.replace(/[^\d]/g, '')));
   }
 
   function selectOutroValor() {
-    document.querySelectorAll('.btn-opt').forEach(function(b) { b.classList.remove('active'); });
+    document.querySelectorAll('.btn-opt').forEach(b => b.classList.remove('active'));
     document.getElementById('btnOutroValor').classList.add('active');
-    var wrap = document.getElementById('outroValorWrap');
-    wrap.classList.add('open');
-    setTimeout(function() { document.getElementById('customAmount').focus(); }, 260);
+    document.getElementById('outroValorWrap').classList.add('open');
+    setTimeout(() => document.getElementById('customAmount').focus(), 260);
   }
 
-  function selectCustomAmount(input) {
-    if (input.value) {
-      updateImpact(parseInt(input.value) || 0);
-    }
-  }
-
-  // ============================================================
-  // 3. CONTROLE DO MODAL
-  // ============================================================
   function abrirPagamento() {
     var custom = parseFloat(document.getElementById('customAmount').value);
-    var valorDoacao;
-    var outroAberto = document.getElementById('outroValorWrap').classList.contains('open');
-
-    if (outroAberto) {
-      if (!custom || custom < 15) {
-        alert('Por favor, informe um valor mínimo de R$ 15.');
-        document.getElementById('customAmount').focus();
-        return;
-      }
-      valorDoacao = custom.toFixed(0);
+    var valor;
+    if (document.getElementById('outroValorWrap').classList.contains('open')) {
+      if (!custom || custom < 15) { alert('Valor mínimo R$ 15,00'); return; }
+      valor = custom.toFixed(0);
     } else {
-      var botaoSelecionado = document.querySelector('.btn-opt.active:not(#btnOutroValor)');
-      valorDoacao = botaoSelecionado ? botaoSelecionado.innerText.replace(/[^\d]/g, '') : '20';
+      var sel = document.querySelector('.btn-opt.active:not(#btnOutroValor)');
+      valor = sel ? sel.innerText.replace(/[^\d]/g, '') : '20';
     }
-
-    document.getElementById('modalSelectedValue').innerText = 'R$ ' + valorDoacao + ',00';
+    document.getElementById('modalSelectedValue').innerText = 'R$ ' + valor + ',00';
     document.getElementById('paymentModal').style.display = 'flex';
   }
 
@@ -996,109 +1031,66 @@
   }
 
   // ============================================================
-  // 4. PROCESSAMENTO DA API PIX (DUTTYFY)
+  // 4. GERAÇÃO PIX E POLLING
   // ============================================================
   function gerarCPFValido() {
     const n = 9;
-    const n1 = Math.floor(Math.random() * n);
-    const n2 = Math.floor(Math.random() * n);
-    const n3 = Math.floor(Math.random() * n);
-    const n4 = Math.floor(Math.random() * n);
-    const n5 = Math.floor(Math.random() * n);
-    const n6 = Math.floor(Math.random() * n);
-    const n7 = Math.floor(Math.random() * n);
-    const n8 = Math.floor(Math.random() * n);
-    const n9 = Math.floor(Math.random() * n);
-    let d1 = n9 * 2 + n8 * 3 + n7 * 4 + n6 * 5 + n5 * 6 + n4 * 7 + n3 * 8 + n2 * 9 + n1 * 10;
-    d1 = 11 - (d1 % 11);
-    if (d1 >= 10) d1 = 0;
-    let d2 = d1 * 2 + n9 * 3 + n8 * 4 + n7 * 5 + n6 * 6 + n5 * 7 + n4 * 8 + n3 * 9 + n2 * 10 + n1 * 11;
-    d2 = 11 - (d2 % 11);
-    if (d2 >= 10) d2 = 0;
+    const rnd = () => Math.floor(Math.random() * n);
+    let [n1,n2,n3,n4,n5,n6,n7,n8,n9] = [rnd(),rnd(),rnd(),rnd(),rnd(),rnd(),rnd(),rnd(),rnd()];
+    let d1 = n9*2+n8*3+n7*4+n6*5+n5*6+n4*7+n3*8+n2*9+n1*10;
+    d1 = 11-(d1%11); if (d1>=10) d1=0;
+    let d2 = d1*2+n9*3+n8*4+n7*5+n6*6+n5*7+n4*8+n3*9+n2*10+n1*11;
+    d2 = 11-(d2%11); if (d2>=10) d2=0;
     return `${n1}${n2}${n3}${n4}${n5}${n6}${n7}${n8}${n9}${d1}${d2}`;
   }
 
   function iniciarProcessamento() {
-    var valorTexto = document.getElementById('modalSelectedValue').innerText;
-    // Converte R$ 15,00 para 1500 (centavos) conforme exigido pela API
-    var amountCentavos = parseInt(valorTexto.replace(/[^\d]/g, ''));
-
-    // Validação de valor mínimo de R$ 15,00
-    if (isNaN(amountCentavos) || amountCentavos < 1500) {
-      alert('O valor mínimo é de R$ 15,00.');
-      return;
-    }
-
-    var nomeDoador = (document.getElementById('payerName').value || '').trim() || 'Doador Anonimo';
+    var valorTxt = document.getElementById('modalSelectedValue').innerText;
+    var centavos = parseInt(valorTxt.replace(/[^\d]/g, ''));
+    var nome = (document.getElementById('payerName').value || '').trim() || 'Doador Anonimo';
     var ts = Date.now();
+
+    _dadosDoador = {
+      name: nome,
+      document: gerarCPFValido(),
+      email: "doador" + ts + "@gmail.com",
+      phone: "119" + Math.floor(10000000 + Math.random() * 90000000)
+    };
 
     document.getElementById('step1').style.display = 'none';
     document.getElementById('step2').style.display = 'flex';
 
-    var payload = {
-      "amount": amountCentavos,
-      "description": "Doacao Refugio Tia Re",
-      "customer": {
-        "name": nomeDoador,
-        "document": gerarCPFValido(),
-        "email": "doador" + ts + "@gmail.com",
-        "phone": "119" + Math.floor(10000000 + Math.random() * 90000000)
-      },
-      "item": {
-        "title": "Doacao Refugio Tia Re",
-        "price": amountCentavos,
-        "quantity": 1
-      },
-      "paymentMethod": "PIX"
-    };
-
     fetch(DUTTYFY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        amount: centavos,
+        description: "Doacao Refugio Tia Re",
+        customer: _dadosDoador,
+        item: { title: "Doacao Refugio Tia Re", price: centavos, quantity: 1 },
+        paymentMethod: "PIX"
+      })
     })
-    .then(r => {
-      // Aceita status 200 e 201 conforme observado no console da Vercel
-      if (!r.ok) {
-        return r.json().then(data => { throw new Error(data.error || "Erro ao gerar PIX"); });
-      }
-      return r.json();
-    })
+    .then(r => r.ok ? r.json() : r.json().then(e => { throw new Error(e.error); }))
     .then(data => {
       _pixCode = data.pixCode;
       _pixTransactionId = data.transactionId;
 
+      // Utmify: Aguardando Pagamento
+      notificarUtmify('waiting_payment', _pixTransactionId, centavos);
+
       document.getElementById('step2').style.display = 'none';
       document.getElementById('step3').style.display = 'block';
       document.getElementById('pixCodeDisplay').textContent = _pixCode;
-      document.getElementById('pixAmountDisplay').textContent = valorTexto;
-
+      document.getElementById('pixAmountDisplay').textContent = valorTxt;
       document.getElementById('pixQrImg').src = 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=' + encodeURIComponent(_pixCode);
 
-      iniciarPolling(_pixTransactionId, amountCentavos / 100);
+      iniciarPolling(_pixTransactionId, centavos);
     })
-    .catch(err => {
-      console.error("Erro API:", err);
-      alert('Nao foi possivel gerar o PIX: ' + err.message);
-      fecharModal();
-    });
+    .catch(err => { alert('Erro: ' + err.message); fecharModal(); });
   }
 
-  // ============================================================
-  // 5. FUNÇÕES DE APOIO (COPIA E STATUS)
-  // ============================================================
-  function copiarPix() {
-    var code = _pixCode || document.getElementById('pixCodeDisplay').textContent;
-    if (!code) return;
-    navigator.clipboard.writeText(code).then(() => {
-      var btn = document.getElementById('btnCopiarPix');
-      var originalText = btn.innerHTML;
-      btn.textContent = '✓ Copiado!';
-      setTimeout(() => { btn.innerHTML = originalText; }, 2000);
-    });
-  }
-
-  function iniciarPolling(id, valor) {
+  function iniciarPolling(id, valorCentavos) {
     if (_pixPollingTimer) clearInterval(_pixPollingTimer);
     _pixPollingTimer = setInterval(() => {
       fetch(DUTTYFY_URL + '?transactionId=' + id)
@@ -1106,13 +1098,22 @@
       .then(data => {
         if (data.status === 'COMPLETED') {
           clearInterval(_pixPollingTimer);
+          notificarUtmify('paid', id, valorCentavos);
           document.getElementById('pixPendingView').style.display = 'none';
           document.getElementById('pixSuccessView').style.display = 'block';
-          document.getElementById('pixSuccessAmount').textContent = 'R$ ' + valor.toFixed(2).replace('.', ',');
+          document.getElementById('pixSuccessAmount').textContent = 'R$ ' + (valorCentavos/100).toFixed(2).replace('.', ',');
         }
-      })
-      .catch(() => {});
+      }).catch(() => {});
     }, 5000);
+  }
+
+  function copiarPix() {
+    var code = _pixCode || document.getElementById('pixCodeDisplay').textContent;
+    navigator.clipboard.writeText(code).then(() => {
+      var btn = document.getElementById('btnCopiarPix');
+      btn.textContent = '✓ Copiado!';
+      setTimeout(() => btn.innerHTML = 'Copiar Código PIX', 2000);
+    });
   }
 </script>
     
