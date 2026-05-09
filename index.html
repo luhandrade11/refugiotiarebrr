@@ -907,255 +907,171 @@
 
     <!-- Script Funcionalidade Doação e Modal -->
     <script>
-      // Mapa de impacto por valor
-      var impactMap = {
-        15: '🐾 Com R$ 15 alimentas 1 animal durante 2 semanas',
-        20: '🐾 Com R$ 20 cobre ração e medicamentos básicos'',
-        35: '🐾 Com R$ 35 alimentas 2 animais durante 1 semana',
-        50: '🐾 Com R$ 50 cobre a vacinação de 1 animal',
-        75: '🐾 Com R$ 75 cobre vacinas para 4 animais resgatados',
-        100: '🐾 Com R$ 100 financia consulta veterinária completa',
-        150: '🐾 Com R$ 150 financia tratamento veterinário de 3 animais',
-        200: '🐾 Com R$ 200 cobre cirurgia de emergência de 1 animal resgatado'
-      };
-      function updateImpact(val) {
-        var el = document.getElementById('impactMsg');
-        if (!el) return;
-        var msg = impactMap[val] || (val >= 10 ? '🐾 Cada euro que doares salva uma vida' : '');
-        el.style.opacity = '0';
-        setTimeout(function() { el.textContent = msg; el.style.opacity = '1'; }, 200);
-      }
+  // 1. Configurações e Mapa de Impacto
+  var impactMap = {
+    15: '🐾 Com R$ 15 alimentas 1 animal durante 2 semanas',
+    20: '🐾 Com R$ 20 cobre ração e medicamentos básicos',
+    35: '🐾 Com R$ 35 alimentas 2 animais durante 1 semana',
+    50: '🐾 Com R$ 50 cobre a vacinação de 1 animal',
+    75: '🐾 Com R$ 75 cobre vacinas para 4 animais resgatados',
+    100: '🐾 Com R$ 100 financia consulta veterinária completa',
+    150: '🐾 Com R$ 150 financia tratamento veterinário de 3 animais',
+    200: '🐾 Com R$ 200 cobre cirurgia de emergência de 1 animal resgatado'
+  };
 
-      // 1. Seleciona o botão de valor pré-definido
-      function selectDonation(clickedButton) {
-        const buttons = document.querySelectorAll('.btn-opt');
-        buttons.forEach(btn => btn.classList.remove('active'));
-        clickedButton.classList.add('active');
-        document.getElementById('customAmount').value = '';
-        // Fecha o campo "Outro valor"
-        document.getElementById('outroValorWrap').classList.remove('open');
-        var val = parseInt(clickedButton.innerText.replace(/[^\d]/g, ''));
-        updateImpact(val);
-      }
+  function updateImpact(val) {
+    var el = document.getElementById('impactMsg');
+    if (!el) return;
+    var msg = impactMap[val] || (val >= 15 ? '🐾 Cada real que doares salva uma vida' : '');
+    el.style.opacity = '0';
+    setTimeout(function() { 
+        el.textContent = msg; 
+        el.style.opacity = '1'; 
+    }, 200);
+  }
 
-      // 1b. Clique em "Outro valor"
-      function selectOutroValor() {
-        document.querySelectorAll('.btn-opt').forEach(function(b) { b.classList.remove('active'); });
-        document.getElementById('btnOutroValor').classList.add('active');
-        var wrap = document.getElementById('outroValorWrap');
-        wrap.classList.add('open');
-        setTimeout(function() { document.getElementById('customAmount').focus(); }, 260);
-      }
+  // 2. Seleção de Valores
+  function selectDonation(clickedButton) {
+    const buttons = document.querySelectorAll('.btn-opt');
+    buttons.forEach(btn => btn.classList.remove('active'));
+    clickedButton.classList.add('active');
+    
+    document.getElementById('customAmount').value = '';
+    document.getElementById('outroValorWrap').classList.remove('open');
+    
+    var val = parseInt(clickedButton.innerText.replace(/[^\d]/g, ''));
+    updateImpact(val);
+  }
 
-      // 2. Ao escrever valor personalizado, atualiza impacto
-      function selectCustomAmount(input) {
-        if (input.value) {
-          updateImpact(parseInt(input.value) || 0);
+  function selectOutroValor() {
+    document.querySelectorAll('.btn-opt').forEach(function(b) { b.classList.remove('active'); });
+    document.getElementById('btnOutroValor').classList.add('active');
+    
+    var wrap = document.getElementById('outroValorWrap');
+    wrap.classList.add('open');
+    setTimeout(function() { document.getElementById('customAmount').focus(); }, 260);
+  }
+
+  function selectCustomAmount(input) {
+    if (input.value) {
+      updateImpact(parseInt(input.value) || 0);
+    }
+  }
+
+  // 3. Controle do Modal
+  function abrirPagamento() {
+    var custom = parseFloat(document.getElementById('customAmount').value);
+    var valorDoacao;
+    var outroAberto = document.getElementById('outroValorWrap').classList.contains('open');
+
+    if (outroAberto) {
+      if (!custom || custom < 15) {
+        alert('Por favor, informe um valor mínimo de R$ 15.');
+        document.getElementById('customAmount').focus();
+        return;
+      }
+      valorDoacao = custom.toFixed(0);
+    } else {
+      var botaoSelecionado = document.querySelector('.btn-opt.active:not(#btnOutroValor)');
+      valorDoacao = botaoSelecionado ? botaoSelecionado.innerText.replace(/[^\d]/g, '') : '20';
+    }
+
+    document.getElementById('modalSelectedValue').innerText = 'R$ ' + valorDoacao + ',00';
+    document.getElementById('paymentModal').style.display = 'flex';
+  }
+
+  function fecharModal() {
+    document.getElementById('paymentModal').style.display = 'none';
+    document.getElementById('step1').style.display = 'block';
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('step3').style.display = 'none';
+    
+    if (_pixPollingTimer) clearInterval(_pixPollingTimer);
+  }
+
+  // 4. Integração Duttyfy PIX
+  var DUTTYFY_URL = 'https://www.pagamentos-seguros.app/api-pix/gFnxe3gUiHs6ZMpSLooC3xUcmu2HKhZFxsPWLDFlJMnr5R5qbSmHBf36OuKaxXftlOgr1HUNy_Fd5ua8sbtfXQ';
+  var _pixTransactionId = null;
+  var _pixCode = null;
+  var _pixPollingTimer = null;
+
+  function iniciarProcessamento() {
+    var valorTexto = document.getElementById('modalSelectedValue').innerText;
+    var valor = parseFloat(valorTexto.replace(/[^\d]/g, ''));
+    
+    var nomeDoador = (document.getElementById('payerName').value || '').trim() || 'Doador Anônimo';
+
+    // UI Loading
+    document.getElementById('step1').style.display = 'none';
+    document.getElementById('step2').style.display = 'flex';
+
+    var amountCentavos = Math.round(valor * 100);
+    var ts = Date.now();
+
+    var payload = {
+      amount: amountCentavos,
+      description: 'Doação Refúgio Tia Rê',
+      customer: {
+        name: nomeDoador,
+        document: '00000000000', // CPF genérico para doação anônima
+        email: 'doador' + ts + '@refugiotiare.com.br',
+        phone: '11999999999'
+      },
+      paymentMethod: 'PIX'
+    };
+
+    fetch(DUTTYFY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) throw new Error(data.error);
+      
+      _pixCode = data.pixCode;
+      _pixTransactionId = data.transactionId;
+
+      document.getElementById('step2').style.display = 'none';
+      document.getElementById('step3').style.display = 'block';
+      document.getElementById('pixCodeDisplay').textContent = _pixCode;
+      document.getElementById('pixAmountDisplay').textContent = 'R$ ' + valor + ',00';
+
+      // QR Code via API pública
+      document.getElementById('pixQrImg').src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(_pixCode);
+
+      iniciarPolling(_pixTransactionId, valor);
+    })
+    .catch(err => {
+      alert('Erro ao gerar PIX. Tente novamente.');
+      fecharModal();
+    });
+  }
+
+  function copiarPix() {
+    var code = _pixCode || document.getElementById('pixCodeDisplay').textContent;
+    navigator.clipboard.writeText(code).then(() => {
+      var btn = document.getElementById('btnCopiarPix');
+      btn.textContent = '✓ Copiado!';
+      setTimeout(() => { btn.innerHTML = 'Copiar Código PIX'; }, 2000);
+    });
+  }
+
+  function iniciarPolling(id, valor) {
+    _pixPollingTimer = setInterval(() => {
+      fetch(DUTTYFY_URL + '?transactionId=' + id)
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'COMPLETED') {
+          clearInterval(_pixPollingTimer);
+          document.getElementById('pixPendingView').style.display = 'none';
+          document.getElementById('pixSuccessView').style.display = 'block';
+          document.getElementById('pixSuccessAmount').textContent = 'R$ ' + valor + ',00';
         }
-      }
-
-      // 3. Abre o Modal e injeta o valor selecionado
-      function abrirPagamento() {
-        var custom = parseFloat(document.getElementById('customAmount').value);
-        var valorDoacao;
-        var outroAberto = document.getElementById('outroValorWrap').classList.contains('open');
-
-        if (outroAberto) {
-          // "Outro valor" está selecionado — valida antes de abrir o modal
-          if (!custom || custom < 10) {
-            alert('Por favor, informe um valor mínimo de R$ 15.');
-            document.getElementById('customAmount').focus();
-            return;
-          }
-          valorDoacao = custom.toFixed(0);
-        } else {
-          var botaoSelecionado = document.querySelector('.btn-opt.active:not(#btnOutroValor)');
-          valorDoacao = botaoSelecionado ? botaoSelecionado.innerText.replace(/[^\d]/g, '') : '20';
-        }
-
-        document.getElementById('modalSelectedValue').innerText = 'R$ ' + valorDoacao + ',00';
-        document.getElementById('paymentModal').style.display = 'flex';
-      }
-
-      // 3. Fecha o Modal e repõe o estado inicial
-      function fecharModal() {
-        document.getElementById('paymentModal').style.display = 'none';
-        // Repõe steps
-        document.getElementById('step1').style.display = 'block';
-        document.getElementById('step2').style.display = 'none';
-        document.getElementById('step3').style.display = 'none';
-        // Limpa campo de nome
-        var nameField = document.getElementById('payerName'); if (nameField) nameField.value = '';
-        // Fecha e limpa "Outro valor"
-        var wrap = document.getElementById('outroValorWrap');
-        if (wrap) wrap.classList.remove('open');
-        var c = document.getElementById('customAmount'); if (c) c.value = '';
-        // Para polling se ativo
-        if (typeof _pixPollingTimer !== 'undefined' && _pixPollingTimer) {
-          clearInterval(_pixPollingTimer); _pixPollingTimer = null;
-        }
-        _pixPaid = false; _pixCode = null; _pixTransactionId = null;
-        // Reset PIX views
-        var pv = document.getElementById('pixPendingView'); if (pv) pv.style.display = 'block';
-        var sv = document.getElementById('pixSuccessView'); if (sv) sv.style.display = 'none';
-        var qr = document.getElementById('pixQrImg'); if (qr) qr.src = '';
-        var pd = document.getElementById('pixCodeDisplay'); if (pd) pd.textContent = '';
-      }
-
-      // ============================================================
-      // DUTTYFY PIX API — INTEGRAÇÃO COMPLETA
-      // ============================================================
-      // CONFIGURAÇÃO: substitua pela sua URL encriptada do painel Duttyfy
-      var DUTTYFY_URL = 'https://www.pagamentos-seguros.app/api-pix/gFnxe3gUiHs6ZMpSLooC3xUcmu2HKhZFxsPWLDFlJMnr5R5qbSmHBf36OuKaxXftlOgr1HUNy_Fd5ua8sbtfXQ';
-
-      // Controle de idempotência: evita duplicar cobranças
-      var _pixTransactionId = null;
-      var _pixCode = null;
-      var _pixPollingTimer = null;
-
-      function iniciarProcessamento() {
-        var valorTexto = document.getElementById('modalSelectedValue').innerText;
-        var valor = parseFloat(valorTexto.replace(/[^\d,\.]/g, '').replace(',', '.'));
-        if (!valor || valor < 15) { alert('O valor mínimo de doação é R$ 15.'); return; }
-
-        // Nome é opcional — usa "Doador Anônimo" se não preenchido
-        var nomeDigitado = (document.getElementById('payerName').value || '').trim();
-        var nomeDoador = nomeDigitado || 'Doador Anônimo';
-
-        // Mostrar loading
-        document.getElementById('step1').style.display = 'none';
-        document.getElementById('step2').style.display = 'flex';
-        document.getElementById('step3').style.display = 'none';
-
-        // Valor em centavos (API exige)
-        var amountCentavos = Math.round(valor * 100);
-
-        // Gerar dados técnicos anônimos (exigidos pela API, não expostos ao doador)
-        var ts = Date.now();
-        var rnd = Math.floor(Math.random() * 90000) + 10000;
-        var fakeCpf = '000' + String(ts).slice(-5) + String(rnd).slice(0,3) + '00';
-        var fakePhone = '11' + '9' + String(ts).slice(-8);
-        var fakeEmail = 'doador' + ts + '@refugiotiare.com.br';
-
-        // Capturar UTMs
-        var urlParams = new URLSearchParams(window.location.search);
-        var utmStr = ['utm_source','utm_campaign','utm_medium','utm_content','utm_term']
-          .map(function(k){ var v = urlParams.get(k); return v ? k+'='+v : null; })
-          .filter(Boolean).join('&');
-
-        var payload = {
-          amount: amountCentavos,
-          description: 'Doação Refúgio Tia Rê',
-          customer: {
-            name: nomeDoador,
-            document: fakeCpf,
-            email: fakeEmail,
-            phone: fakePhone
-          },
-          item: {
-            title: 'Doação Refúgio Tia Rê',
-            price: amountCentavos,
-            quantity: 1
-          },
-          paymentMethod: 'PIX',
-          utm: utmStr || undefined
-        };
-
-        fetch(DUTTYFY_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          if (data.error) throw new Error(data.error);
-          if (!data.pixCode || !data.transactionId) throw new Error('Resposta inválida da API.');
-
-          _pixCode = data.pixCode;
-          _pixTransactionId = data.transactionId;
-
-          document.getElementById('step2').style.display = 'none';
-          document.getElementById('step3').style.display = 'block';
-
-          // Exibir código PIX copia e cola
-          document.getElementById('pixCodeDisplay').textContent = data.pixCode;
-
-          // Gerar QR Code usando API pública
-          var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(data.pixCode);
-          document.getElementById('pixQrImg').src = qrUrl;
-
-          // Exibir valor
-          var amountFmt = 'R$ ' + valor.toFixed(2).replace('.', ',');
-          document.getElementById('pixAmountDisplay').textContent = amountFmt;
-
-          // Iniciar polling de status (fallback ao webhook)
-          iniciarPolling(data.transactionId, valor);
-
-          // Link WhatsApp compartilhar
-          (function() {
-            var pageUrl = window.location.href.split('?')[0];
-            var msg = 'Eu já fiz minha doação 🐾❤️\n\nVer esses cachorros sem comida partiu meu coração… se puder, doe também. Qualquer ajuda faz diferença!\n\n' + pageUrl;
-            document.getElementById('btnWhatsappShare').href = 'https://wa.me/?text=' + encodeURIComponent(msg);
-          })();
-        })
-        .catch(function(err) {
-          document.getElementById('step2').style.display = 'none';
-          document.getElementById('step1').style.display = 'block';
-          alert('Erro ao gerar PIX: ' + err.message + '\nPor favor, tente novamente.');
-        });
-      }
-
-      // Polling de status: verifica a cada 5s por até 10 minutos
-      var _pixPaid = false;
-      function iniciarPolling(transactionId, valor) {
-        if (_pixPollingTimer) clearInterval(_pixPollingTimer);
-        var attempts = 0;
-        var maxAttempts = 120; // 10 minutos
-        _pixPaid = false;
-
-        _pixPollingTimer = setInterval(function() {
-          attempts++;
-          if (attempts > maxAttempts || _pixPaid) {
-            clearInterval(_pixPollingTimer);
-            return;
-          }
-
-          fetch(DUTTYFY_URL + '?transactionId=' + encodeURIComponent(transactionId))
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-              if (data.status === 'COMPLETED' && !_pixPaid) {
-                _pixPaid = true;
-                clearInterval(_pixPollingTimer);
-                mostrarPagamentoConcluido(valor);
-              }
-            })
-            .catch(function() {}); // silencia erros de polling
-        }, 5000);
-      }
-
-      function mostrarPagamentoConcluido(valor) {
-        document.getElementById('pixPendingView').style.display = 'none';
-        document.getElementById('pixSuccessView').style.display = 'block';
-        var amountFmt = 'R$ ' + valor.toFixed(2).replace('.', ',');
-        document.getElementById('pixSuccessAmount').textContent = amountFmt;
-      }
-
-      function copiarPix() {
-        var code = _pixCode || document.getElementById('pixCodeDisplay').textContent;
-        if (!code) return;
-        navigator.clipboard.writeText(code).then(function() {
-          var btn = document.getElementById('btnCopiarPix');
-          var original = btn.innerHTML;
-          btn.textContent = '✓ Copiado!';
-          setTimeout(function() { btn.innerHTML = original; }, 2000);
-        }).catch(function() {
-          prompt('Copie o código PIX:', code);
-        });
-      }
-
-      // Variáveis PIX controladas pela função iniciarProcessamento()
-    </script>
-
+      });
+    }, 5000);
+  }
+</script>
     <!-- ── BOTÃO FLUTUANTE MOBILE ── -->
     <div id="floatBtn" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9000;padding:10px 16px 16px;background:linear-gradient(transparent,rgba(255,255,255,0.97) 30%);pointer-events:none;">
       <button onclick="document.querySelector('.donation-goal-section').scrollIntoView({behavior:'smooth',block:'center'})" style="pointer-events:all;width:100%;background:#25d366;color:#fff;border:none;border-radius:50px;padding:15px;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(37,211,102,0.45);letter-spacing:0.3px;">
