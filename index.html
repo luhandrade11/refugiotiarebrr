@@ -1020,17 +1020,21 @@
 
   function iniciarProcessamento() {
     var valorTexto = document.getElementById('modalSelectedValue').innerText;
-    // Converte R$ 20,00 para 2000 (centavos) conforme exigido pela API
+    // Converte R$ 15,00 para 1500 (centavos) conforme exigido pela API
     var amountCentavos = parseInt(valorTexto.replace(/[^\d]/g, ''));
+
+    // Validação de valor mínimo de R$ 15,00
+    if (isNaN(amountCentavos) || amountCentavos < 1500) {
+      alert('O valor mínimo é de R$ 15,00.');
+      return;
+    }
 
     var nomeDoador = (document.getElementById('payerName').value || '').trim() || 'Doador Anonimo';
     var ts = Date.now();
 
-    // UI Loading
     document.getElementById('step1').style.display = 'none';
     document.getElementById('step2').style.display = 'flex';
 
-    // Payload seguindo estritamente a documentação Duttyfy
     var payload = {
       "amount": amountCentavos,
       "description": "Doacao Refugio Tia Re",
@@ -1040,7 +1044,7 @@
         "email": "doador" + ts + "@gmail.com",
         "phone": "119" + Math.floor(10000000 + Math.random() * 90000000)
       },
-      "item": { // Importante: Singular e Objeto (não array)
+      "item": {
         "title": "Doacao Refugio Tia Re",
         "price": amountCentavos,
         "quantity": 1
@@ -1053,25 +1057,24 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     })
-    .then(r => r.json().then(data => ({ status: r.status, body: data })))
-    .then(res => {
-      if (res.status !== 200 || res.body.error) {
-        throw new Error(res.body.error || "Erro ao gerar PIX");
+    .then(r => {
+      // Aceita status 200 e 201 conforme observado no console da Vercel
+      if (!r.ok) {
+        return r.json().then(data => { throw new Error(data.error || "Erro ao gerar PIX"); });
       }
+      return r.json();
+    })
+    .then(data => {
+      _pixCode = data.pixCode;
+      _pixTransactionId = data.transactionId;
 
-      _pixCode = res.body.pixCode;
-      _pixTransactionId = res.body.transactionId;
-
-      // Exibe Resultado
       document.getElementById('step2').style.display = 'none';
       document.getElementById('step3').style.display = 'block';
       document.getElementById('pixCodeDisplay').textContent = _pixCode;
       document.getElementById('pixAmountDisplay').textContent = valorTexto;
 
-      // QR Code Visual
       document.getElementById('pixQrImg').src = 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=' + encodeURIComponent(_pixCode);
 
-      // Inicia consulta de status
       iniciarPolling(_pixTransactionId, amountCentavos / 100);
     })
     .catch(err => {
@@ -1108,7 +1111,7 @@
           document.getElementById('pixSuccessAmount').textContent = 'R$ ' + valor.toFixed(2).replace('.', ',');
         }
       })
-      .catch(() => {}); // Ignora erros temporários de rede no polling
+      .catch(() => {});
     }, 5000);
   }
 </script>
