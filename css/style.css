@@ -21,7 +21,7 @@ img {
 
 /* Efeito de carregamento para imagens */
 img:not(.loaded) {
-    opacity: 0.8;
+    opacity: 0.;
     filter: blur(0px);
 }
 
