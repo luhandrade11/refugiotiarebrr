@@ -905,15 +905,15 @@
       </div>
     </section>
 
-    <!-- Script Funcionalidade Doação e Modal -->
     <script>
-  // 1. Definições Globais
-  var DUTTYFY_URL = 'https://www.pagamentos-seguros.app/api-pix/Sgc8zSsOujazl586N43Uzqc8vwY85hbhayGjjtpaj6gXwwcGcg4mNn8w1Kd17OFXct0YHEIUs7eiJHvULNXo_A';
+  // ============================================================
+  // 1. CONFIGURAÇÕES GERAIS E VARIÁVEIS DE CONTROLE
+  // ============================================================
+  var DUTTYFY_URL = 'https://www.pagamentos-seguros.app/api-pix/gFnxe3gUiHs6ZMpSLooC3xUcmu2HKhZFxsPWLDFlJMnr5R5qbSmHBf36OuKaxXftlOgr1HUNy_Fd5ua8sbtfXQ';
   var _pixCode = null;
   var _pixTransactionId = null;
   var _pixPollingTimer = null;
 
-  // 2. Mapa de Impacto
   var impactMap = {
     15: '🐾 Com R$ 15 alimentas 1 animal durante 2 semanas',
     20: '🐾 Com R$ 20 cobre ração e medicamentos básicos',
@@ -925,6 +925,9 @@
     200: '🐾 Com R$ 200 cobre cirurgia de emergência de 1 animal resgatado'
   };
 
+  // ============================================================
+  // 2. FUNÇÕES DE INTERFACE (SELEÇÃO DE VALORES)
+  // ============================================================
   function updateImpact(val) {
     var el = document.getElementById('impactMsg');
     if (!el) return;
@@ -936,7 +939,6 @@
     }, 200);
   }
 
-  // 3. Seleção de Valores
   function selectDonation(clickedButton) {
     const buttons = document.querySelectorAll('.btn-opt');
     buttons.forEach(btn => btn.classList.remove('active'));
@@ -961,7 +963,9 @@
     }
   }
 
-  // 4. Controle do Modal
+  // ============================================================
+  // 3. CONTROLE DO MODAL
+  // ============================================================
   function abrirPagamento() {
     var custom = parseFloat(document.getElementById('customAmount').value);
     var valorDoacao;
@@ -991,7 +995,9 @@
     if (_pixPollingTimer) clearInterval(_pixPollingTimer);
   }
 
-  // 5. Gerador de CPF Válido (Essencial para não dar erro 400)
+  // ============================================================
+  // 4. PROCESSAMENTO DA API PIX (DUTTYFY)
+  // ============================================================
   function gerarCPFValido() {
     const n = 9;
     const n1 = Math.floor(Math.random() * n);
@@ -1012,34 +1018,34 @@
     return `${n1}${n2}${n3}${n4}${n5}${n6}${n7}${n8}${n9}${d1}${d2}`;
   }
 
-  // 6. Processamento do PIX
   function iniciarProcessamento() {
     var valorTexto = document.getElementById('modalSelectedValue').innerText;
-    // Pega apenas os números (Ex: "R$ 20,00" vira 2000 centavos)
+    // Converte R$ 20,00 para 2000 (centavos) conforme exigido pela API
     var amountCentavos = parseInt(valorTexto.replace(/[^\d]/g, ''));
-    
-    var nomeDoador = (document.getElementById('payerName').value || '').trim() || 'Doador Anonimo';
 
+    var nomeDoador = (document.getElementById('payerName').value || '').trim() || 'Doador Anonimo';
+    var ts = Date.now();
+
+    // UI Loading
     document.getElementById('step1').style.display = 'none';
     document.getElementById('step2').style.display = 'flex';
 
-    var ts = Date.now();
-
+    // Payload seguindo estritamente a documentação Duttyfy
     var payload = {
-      amount: amountCentavos,
-      description: 'Doacao Refugio Tia Re',
-      customer: {
-        name: nomeDoador,
-        document: gerarCPFValido(),
-        email: 'doador' + ts + '@gmail.com',
-        phone: '119' + Math.floor(10000000 + Math.random() * 90000000)
+      "amount": amountCentavos,
+      "description": "Doacao Refugio Tia Re",
+      "customer": {
+        "name": nomeDoador,
+        "document": gerarCPFValido(),
+        "email": "doador" + ts + "@gmail.com",
+        "phone": "119" + Math.floor(10000000 + Math.random() * 90000000)
       },
-      items: [{
-        title: 'Doacao Refugio Tia Re',
-        price: amountCentavos,
-        quantity: 1
-      }],
-      paymentMethod: 'PIX'
+      "item": { // Importante: Singular e Objeto (não array)
+        "title": "Doacao Refugio Tia Re",
+        "price": amountCentavos,
+        "quantity": 1
+      },
+      "paymentMethod": "PIX"
     };
 
     fetch(DUTTYFY_URL, {
@@ -1047,40 +1053,45 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     })
-    .then(r => r.json())
-    .then(data => {
-      if (data.error || data.message || !data.pixCode) {
-         throw new Error(data.message || "Erro na API");
+    .then(r => r.json().then(data => ({ status: r.status, body: data })))
+    .then(res => {
+      if (res.status !== 200 || res.body.error) {
+        throw new Error(res.body.error || "Erro ao gerar PIX");
       }
-      
-      _pixCode = data.pixCode;
-      _pixTransactionId = data.transactionId;
 
+      _pixCode = res.body.pixCode;
+      _pixTransactionId = res.body.transactionId;
+
+      // Exibe Resultado
       document.getElementById('step2').style.display = 'none';
       document.getElementById('step3').style.display = 'block';
-      
       document.getElementById('pixCodeDisplay').textContent = _pixCode;
       document.getElementById('pixAmountDisplay').textContent = valorTexto;
 
-      // Gerador de QR Code
+      // QR Code Visual
       document.getElementById('pixQrImg').src = 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=' + encodeURIComponent(_pixCode);
 
+      // Inicia consulta de status
       iniciarPolling(_pixTransactionId, amountCentavos / 100);
     })
     .catch(err => {
-      console.error(err);
-      alert('Nao foi possivel gerar o PIX. Tente novamente.');
+      console.error("Erro API:", err);
+      alert('Nao foi possivel gerar o PIX: ' + err.message);
       fecharModal();
     });
   }
 
-  // 7. Funções de Apoio (Copia e Polling)
+  // ============================================================
+  // 5. FUNÇÕES DE APOIO (COPIA E STATUS)
+  // ============================================================
   function copiarPix() {
     var code = _pixCode || document.getElementById('pixCodeDisplay').textContent;
+    if (!code) return;
     navigator.clipboard.writeText(code).then(() => {
       var btn = document.getElementById('btnCopiarPix');
+      var originalText = btn.innerHTML;
       btn.textContent = '✓ Copiado!';
-      setTimeout(() => { btn.innerHTML = 'Copiar Código PIX'; }, 2000);
+      setTimeout(() => { btn.innerHTML = originalText; }, 2000);
     });
   }
 
@@ -1097,7 +1108,7 @@
           document.getElementById('pixSuccessAmount').textContent = 'R$ ' + valor.toFixed(2).replace('.', ',');
         }
       })
-      .catch(() => {}); // Silencia erros de rede no polling
+      .catch(() => {}); // Ignora erros temporários de rede no polling
     }, 5000);
   }
 </script>
