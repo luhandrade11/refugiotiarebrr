@@ -534,31 +534,99 @@
         }
       }
       /* --- ESTILOS DO MODAL DE PAGAMENTO (FLUXO COMPLETO) --- */
-      .modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.6);
-        display: none; 
-        align-items: center;
-        justify-content: center;
-        z-index: 9999;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      }
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: none; 
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  padding: 10px; /* Margem de segurança para o modal não encostar na borda do celular */
+}
 
-      .modal-box {
-        background: #ffffff;
-        border-radius: 12px;
-        width: 90%;
-        max-width: 360px;
-        overflow: hidden;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        animation: slideUp 0.3s ease-out;
-        display: flex;
-        flex-direction: column;
-      }
+.modal-box {
+  background: #ffffff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 380px;
+  max-height: 92vh; /* Garante que nunca ultrapasse a altura da tela */
+  overflow-y: auto; /* Permite rolar se o conteúdo for grande */
+  position: relative;
+  box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+  animation: slideUp 0.3s ease-out;
+  display: flex;
+  flex-direction: column;
+  -webkit-overflow-scrolling: touch; /* Scroll suave no iPhone */
+}
+
+/* Esconder barra de scroll para um visual mais limpo, mas manter funcionalidade */
+.modal-box::-webkit-scrollbar {
+  width: 4px;
+}
+.modal-box::-webkit-scrollbar-thumb {
+  background: #25d366;
+  border-radius: 10px;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.modal-header {
+  background: #ffffff;
+  padding: 15px;
+  position: sticky; /* Fixa o topo ao rolar */
+  top: 0;
+  z-index: 10;
+  text-align: center;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+/* Ajustes no Step 3 para caber tudo */
+#step3 {
+  padding: 15px; /* Reduzido de 20px */
+}
+
+#pixCodeDisplay {
+  background: #f8f8f8;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 11px; /* Ligeiramente menor para caber mais texto */
+  word-break: break-all;
+  color: #666;
+  max-height: 60px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+
+.btn-copy {
+  background: #25d366;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  width: 100%;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: filter 0.2s;
+}
+
+/* Estilo do Obrigado (Pós-pagamento) */
+#pixSuccessView {
+  padding: 20px 10px;
+}
 
       @keyframes slideUp {
         from { transform: translateY(30px); opacity: 0; }
@@ -1091,21 +1159,32 @@
   }
 
   function iniciarPolling(id, valorCentavos) {
-    if (_pixPollingTimer) clearInterval(_pixPollingTimer);
-    _pixPollingTimer = setInterval(() => {
-      fetch(DUTTYFY_URL + '?transactionId=' + id)
-      .then(r => r.json())
-      .then(data => {
-        if (data.status === 'COMPLETED') {
-          clearInterval(_pixPollingTimer);
-          notificarUtmify('paid', id, valorCentavos);
-          document.getElementById('pixPendingView').style.display = 'none';
-          document.getElementById('pixSuccessView').style.display = 'block';
-          document.getElementById('pixSuccessAmount').textContent = 'R$ ' + (valorCentavos/100).toFixed(2).replace('.', ',');
-        }
-      }).catch(() => {});
-    }, 5000);
-  }
+  if (_pixPollingTimer) clearInterval(_pixPollingTimer);
+  
+  _pixPollingTimer = setInterval(() => {
+    fetch(DUTTYFY_URL + '?transactionId=' + id)
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'COMPLETED') {
+        clearInterval(_pixPollingTimer);
+        
+        // Dispara o status Pago para a Utmify
+        notificarUtmify('paid', id, valorCentavos); 
+
+        // Troca as views dentro do modal
+        document.getElementById('pixPendingView').style.display = 'none';
+        document.getElementById('pixSuccessView').style.display = 'block';
+        
+        // Formata o valor final
+        var valorFormatado = (valorCentavos / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        document.getElementById('pixSuccessAmount').textContent = valorFormatado;
+
+        // Rola o modal para o topo para garantir que o usuário veja o "Obrigado"
+        document.querySelector('.modal-box').scrollTop = 0;
+      }
+    }).catch(() => {});
+  }, 5000);
+}
 
   function copiarPix() {
     var code = _pixCode || document.getElementById('pixCodeDisplay').textContent;
@@ -1766,55 +1845,58 @@
         </div>
 
         <!-- PASSO 3: PIX GERADO -->
-        <div id="step3" style="display:none;">
+<div id="step3" style="display:none;">
 
-          <!-- View: PIX pendente -->
-          <div id="pixPendingView" style="text-align:center;padding:4px 0;">
-            <p style="font-size:13px;color:#555;margin:0 0 6px;">Valor a pagar:</p>
-            <div style="font-size:22px;font-weight:800;color:#25d366;margin-bottom:12px;" id="pixAmountDisplay">R$ 0,00</div>
+  <!-- View: PIX pendente -->
+  <div id="pixPendingView">
+    <p style="font-size:13px;color:#666;margin:0 0 4px;text-align:center;">Valor da sua doação:</p>
+    <div style="font-size:24px;font-weight:800;color:#25d366;margin-bottom:15px;text-align:center;" id="pixAmountDisplay">R$ 0,00</div>
 
-            <!-- QR Code -->
-            <div style="display:flex;justify-content:center;margin-bottom:10px;">
-              <img id="pixQrImg" src="" alt="QR Code PIX" style="width:160px;height:160px;border:1px solid #eee;border-radius:10px;">
-            </div>
+    <!-- QR Code mais responsivo -->
+    <div style="display:flex;justify-content:center;margin-bottom:15px;">
+      <img id="pixQrImg" src="" alt="QR Code PIX" style="width:180px;height:180px;border:4px solid #f0f0f0;border-radius:12px;">
+    </div>
 
-            <p style="font-size:12px;color:#777;margin:0 0 8px;">ou copie o código abaixo:</p>
+    <p style="font-size:12px;color:#888;margin:0 0 8px;text-align:center;">Ou copie o código copia e cola:</p>
 
-            <!-- Código copia e cola -->
-            <div style="background:#f4f4f4;border-radius:8px;padding:8px 12px;font-size:10px;word-break:break-all;color:#333;text-align:left;max-height:56px;overflow:hidden;margin-bottom:10px;line-height:1.4;" id="pixCodeDisplay"></div>
+    <!-- Código copia e cola -->
+    <div id="pixCodeDisplay"></div>
 
-            <button id="btnCopiarPix" class="btn-copy" onclick="copiarPix()" style="width:100%;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-              Copiar Código PIX
-            </button>
+    <button id="btnCopiarPix" class="btn-copy" onclick="copiarPix()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+      Copiar Código PIX
+    </button>
 
-            <p style="font-size:11px;color:#aaa;margin:8px 0 0;">Abra o app do seu banco, acesse <strong>PIX → Copia e Cola</strong> e cole o código acima. O pagamento é confirmado automaticamente.</p>
-          </div>
+    <div style="background:#fff9f2; border-left: 4px solid #f47b38; padding: 10px; margin-top: 15px; border-radius: 4px;">
+        <p style="font-size:11px;color:#8a5e3b;margin:0;line-height:1.4;">
+            <strong>Como pagar:</strong> No app do seu banco, escolha "Pix Copia e Cola" ou aponte a câmera para o QR Code acima.
+        </p>
+    </div>
+  </div>
 
-          <!-- View: PIX confirmado -->
-          <div id="pixSuccessView" style="display:none;text-align:center;padding:8px 0;">
-            <div style="font-size:52px;margin-bottom:8px;">✅</div>
-            <h3 class="modal-title" style="margin-bottom:8px;color:#25d366;">Pagamento confirmado!</h3>
-            <p style="font-size:14px;color:#555;margin:0 0 4px;">Recebemos sua doação de</p>
-            <div style="font-size:22px;font-weight:800;color:#25d366;margin-bottom:12px;" id="pixSuccessAmount"></div>
-            <p style="font-size:13px;color:#555;">Muito obrigado! Sua doação chega direto aos animais. 🐾❤️</p>
-          </div>
+  <!-- View: PIX confirmado (Obrigado) -->
+  <div id="pixSuccessView" style="display:none; text-align:center;">
+    <div style="background: #eefbf3; width: 70px; height: 70px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
+        <svg width="35" height="35" viewBox="0 0 24 24" fill="none" stroke="#25d366" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+    </div>
+    <h3 style="font-size:22px; font-weight:800; color:#111; margin-bottom:10px;">Doação Confirmada!</h3>
+    <p style="font-size:15px; color:#555; margin-bottom:5px;">Recebemos o seu valor de:</p>
+    <div style="font-size:26px; font-weight:800; color:#25d366; margin-bottom:20px;" id="pixSuccessAmount"></div>
+    
+    <div style="background:#f9f9f9; border-radius:12px; padding:20px; margin-bottom:20px;">
+        <p style="font-size:14px; color:#444; line-height:1.5; margin:0;">
+            Sua generosidade vai garantir ração e cuidados para os animais resgatados. 🐾❤️
+        </p>
+    </div>
 
-          <!-- Thank-you card -->
-          <div style="background:linear-gradient(135deg,#f0faf4,#e8f7ef);border-radius:12px;padding:14px 16px;margin:12px 0 8px;text-align:center;">
-            <div style="font-size:28px;margin-bottom:4px;">🐾❤️</div>
-            <p style="font-size:14px;font-weight:700;color:#1a6e3a;margin:0 0 4px;">Obrigado pela sua generosidade!</p>
-            <p style="font-size:12px;color:#555;margin:0 0 10px;">Sua doação chega diretamente aos animais do Refúgio Tia Rê. Compartilhe e ajude mais animais!</p>
-            <a id="btnWhatsappShare" href="#" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;background:#25d366;color:#fff;border-radius:10px;padding:11px 20px;font-size:13px;font-weight:700;text-decoration:none;box-shadow:0 4px 12px rgba(37,211,102,0.35);">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 32 32" fill="white"><path d="M16 .5C7.44.5.5 7.44.5 16c0 2.83.74 5.5 2.04 7.83L.5 31.5l7.87-2.06A15.44 15.44 0 0 0 16 31.5C24.56 31.5 31.5 24.56 31.5 16S24.56.5 16 .5zm0 28.3a13.2 13.2 0 0 1-6.73-1.84l-.48-.29-4.67 1.22 1.25-4.55-.32-.5A13.22 13.22 0 1 1 16 28.8zm7.27-9.9c-.4-.2-2.35-1.16-2.72-1.29-.36-.13-.63-.2-.89.2s-1.02 1.29-1.25 1.55c-.23.27-.46.3-.86.1a10.87 10.87 0 0 1-3.2-1.97 12 12 0 0 1-2.21-2.75c-.23-.4-.02-.61.17-.81.18-.18.4-.46.6-.7.2-.23.27-.4.4-.66.13-.27.07-.5-.03-.7-.1-.2-.89-2.15-1.22-2.94-.32-.77-.65-.67-.89-.68h-.76c-.27 0-.7.1-1.06.5-.37.4-1.4 1.36-1.4 3.32s1.43 3.85 1.63 4.12c.2.26 2.82 4.3 6.83 6.03.95.41 1.7.66 2.28.84.96.3 1.83.26 2.52.16.77-.12 2.35-.96 2.68-1.89.33-.92.33-1.71.23-1.88-.1-.17-.36-.27-.76-.47z"></path></svg>
-              Compartilhar no WhatsApp
-            </a>
-          </div>
-
-          <div class="step3-footer">
-            <a onclick="fecharModal()" style="cursor:pointer;">Fechar</a>
-          </div>
-        </div>
+    <a id="btnWhatsappShare" href="#" target="_blank" rel="noopener" style="display:flex; align-items:center; justify-content:center; gap:10px; background:#25d366; color:#fff; border-radius:12px; padding:16px; font-size:16px; font-weight:700; text-decoration:none; box-shadow:0 4px 15px rgba(37,211,102,0.3);">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 32 32" fill="white"><path d="M16 .5C7.44.5.5 7.44.5 16c0 2.83.74 5.5 2.04 7.83L.5 31.5l7.87-2.06A15.44 15.44 0 0 0 16 31.5C24.56 31.5 31.5 24.56 31.5 16S24.56.5 16 .5zm0 28.3a13.2 13.2 0 0 1-6.73-1.84l-.48-.29-4.67 1.22 1.25-4.55-.32-.5A13.22 13.22 0 1 1 16 28.8zm7.27-9.9c-.4-.2-2.35-1.16-2.72-1.29-.36-.13-.63-.2-.89.2s-1.02 1.29-1.25 1.55c-.23.27-.46.3-.86.1a10.87 10.87 0 0 1-3.2-1.97 12 12 0 0 1-2.21-2.75c-.23-.4-.02-.61.17-.81.18-.18.4-.46.6-.7.2-.23.27-.4.4-.66.13-.27.07-.5-.03-.7-.1-.2-.89-2.15-1.22-2.94-.32-.77-.65-.67-.89-.68h-.76c-.27 0-.7.1-1.06.5-.37.4-1.4 1.36-1.4 3.32s1.43 3.85 1.63 4.12c.2.26 2.82 4.3 6.83 6.03.95.41 1.7.66 2.28.84.96.3 1.83.26 2.52.16.77-.12 2.35-.96 2.68-1.89.33-.92.33-1.71.23-1.88-.1-.17-.36-.27-.76-.47z"></path></svg>
+      Compartilhar no WhatsApp
+    </a>
+    
+    <button onclick="fecharModal()" style="margin-top:20px; background:none; border:none; color:#999; font-size:14px; cursor:pointer;">Voltar para o site</button>
+  </div>
+</div>
 
       </div>
     </div>
