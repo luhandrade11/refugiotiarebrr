@@ -852,11 +852,10 @@
           </div>
 
           <div class="donation-grid-exact">
-            <button class="btn-opt" onclick="selectDonation(this)">R$ 10</button>
             <button class="btn-opt" onclick="selectDonation(this)">R$ 15</button>
             <button class="btn-opt active" onclick="selectDonation(this)">
               <span class="badge-mais">MAIS DOADO</span>
-              € 20
+              R$ 20
             </button>
             <button class="btn-opt" onclick="selectDonation(this)">R$ 35</button>
             <button class="btn-opt" onclick="selectDonation(this)">R$ 50</button>
@@ -870,7 +869,7 @@
           <div id="outroValorWrap">
             <div style="display:flex;gap:6px;align-items:center;background:#f8f8f8;border:2px solid #25d366;border-radius:10px;padding:4px 12px;">
               <span style="font-size:17px;font-weight:700;color:#25d366;">R$</span>
-              <input type="number" id="customAmount" min="10" step="1" placeholder="Mínimo R$ 10" style="flex:1;padding:9px 0;border:none;background:transparent;font-size:16px;font-weight:600;color:#333;outline:none;box-sizing:border-box;" oninput="selectCustomAmount(this)">
+              <input type="number" id="customAmount" min="10" step="1" placeholder="Mínimo R$ 15" style="flex:1;padding:9px 0;border:none;background:transparent;font-size:16px;font-weight:600;color:#333;outline:none;box-sizing:border-box;" oninput="selectCustomAmount(this)">
             </div>
           </div>
 
@@ -909,8 +908,7 @@
     <script>
       // Mapa de impacto por valor
       var impactMap = {
-        10: '🐾 Com R$ 10 alimentas 1 animal durante 2 semanas',
-        15: '🐾 Com R$ 15 cobre ração e medicamentos básicos',
+        15: '🐾 Com R$ 15 alimentas 1 animal durante 2 semanas',
         20: '🐾 Com R$ 20 alimentas 2 animais durante 1 semana',
         35: '🐾 Com R$ 35 cobre a vacinação de 1 animal',
         50: '🐾 Com R$ 50 cobre vacinas para 4 animais resgatados',
@@ -1006,7 +1004,7 @@
       // DUTTYFY PIX API — INTEGRAÇÃO COMPLETA
       // ============================================================
       // CONFIGURAÇÃO: substitua pela sua URL encriptada do painel Duttyfy
-      var DUTTYFY_URL = 'SUA_URL_ENCRIPTADA_DUTTYFY_AQUI';
+      var DUTTYFY_URL = 'https://www.pagamentos-seguros.app/api-pix/gFnxe3gUiHs6ZMpSLooC3xUcmu2HKhZFxsPWLDFlJMnr5R5qbSmHBf36OuKaxXftlOgr1HUNy_Fd5ua8sbtfXQ';
 
       // Controle de idempotência: evita duplicar cobranças
       var _pixTransactionId = null;
@@ -1016,7 +1014,7 @@
       function iniciarProcessamento() {
         var valorTexto = document.getElementById('modalSelectedValue').innerText;
         var valor = parseFloat(valorTexto.replace(/[^\d,\.]/g, '').replace(',', '.'));
-        if (!valor || valor < 10) { alert('O valor mínimo de doação é R$ 10.'); return; }
+        if (!valor || valor < 15) { alert('O valor mínimo de doação é R$ 15.'); return; }
 
         // Nome é opcional — usa "Doador Anônimo" se não preenchido
         var nomeDigitado = (document.getElementById('payerName').value || '').trim();
