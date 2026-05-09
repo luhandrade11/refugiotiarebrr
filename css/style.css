@@ -22,7 +22,7 @@ img {
 /* Efeito de carregamento para imagens */
 img:not(.loaded) {
     opacity: 0.8;
-    filter: blur(1px);
+    filter: blur(0px);
 }
 
 img.loaded {
