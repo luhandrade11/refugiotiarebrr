@@ -862,6 +862,7 @@
             <button class="btn-opt" onclick="selectDonation(this)">R$ 75</button>
             <button class="btn-opt" onclick="selectDonation(this)">R$ 100</button>
             <button class="btn-opt" onclick="selectDonation(this)">R$ 150</button>
+            <button class="btn-opt" onclick="selectDonation(this)">R$ 200</button>
             <button class="btn-opt btn-outro" id="btnOutroValor" onclick="selectOutroValor()">✏️ Outro valor</button>
           </div>
 
@@ -909,19 +910,20 @@
       // Mapa de impacto por valor
       var impactMap = {
         15: '🐾 Com R$ 15 alimentas 1 animal durante 2 semanas',
-        20: '🐾 Com R$ 20 alimentas 2 animais durante 1 semana',
-        35: '🐾 Com R$ 35 cobre a vacinação de 1 animal',
-        50: '🐾 Com R$ 50 cobre vacinas para 4 animais resgatados',
-        75: '🐾 Com R$ 75 financia consulta veterinária completa',
-        100: '🐾 Com R$ 100 financia tratamento veterinário de 3 animais',
-        150: '🐾 Com R$ 150 cobre cirurgia de emergência de 1 animal resgatado'
+        20: '🐾 Com R$ 20 cobre ração e medicamentos básicos'',
+        35: '🐾 Com R$ 35 alimentas 2 animais durante 1 semana',
+        50: '🐾 Com R$ 50 cobre a vacinação de 1 animal',
+        75: '🐾 Com R$ 75 cobre vacinas para 4 animais resgatados',
+        100: '🐾 Com R$ 100 financia consulta veterinária completa',
+        150: '🐾 Com R$ 150 financia tratamento veterinário de 3 animais',
+        200: '🐾 Com R$ 200 cobre cirurgia de emergência de 1 animal resgatado'
       };
       function updateImpact(val) {
         var el = document.getElementById('impactMsg');
         if (!el) return;
         var msg = impactMap[val] || (val >= 10 ? '🐾 Cada euro que doares salva uma vida' : '');
         el.style.opacity = '0';
-        setTimeout(function() { el.textContent = msg; el.style.opacity = '1'; }, 150);
+        setTimeout(function() { el.textContent = msg; el.style.opacity = '1'; }, 200);
       }
 
       // 1. Seleciona o botão de valor pré-definido
@@ -961,7 +963,7 @@
         if (outroAberto) {
           // "Outro valor" está selecionado — valida antes de abrir o modal
           if (!custom || custom < 10) {
-            alert('Por favor, informe um valor mínimo de R$ 10.');
+            alert('Por favor, informe um valor mínimo de R$ 15.');
             document.getElementById('customAmount').focus();
             return;
           }
@@ -1416,12 +1418,12 @@
         
         <div class="impact-grid-exact">
           <div class="impact-item-exact">
-            <span class="impact-value-exact">R$ 5</span>
+            <span class="impact-value-exact">R$ 15</span>
             <span class="impact-desc-exact">Alimenta 1 animal por uma semana</span>
           </div>
           
           <div class="impact-item-exact">
-            <span class="impact-value-exact">R$ 10</span>
+            <span class="impact-value-exact">R$ 20</span>
             <span class="impact-desc-exact">Ração e medicamentos básicos para 2 animais por 10 dias</span>
           </div>
           
